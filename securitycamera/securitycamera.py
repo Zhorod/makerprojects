@@ -32,7 +32,7 @@ def loop():
             # turn on the LED and take a picture
             #GPIO.output(ledPin,GPIO.HIGH) # turn on led
             #now = time.localtime(time.time())
-            now = "0000"
+            now = "Sat Oct 15 20:15:21 2022"
             filename = '/home/pi/Desktop/Images/image '+time.strftime("%c", now)+'.jpg'
             camera.capture(filename)
 
