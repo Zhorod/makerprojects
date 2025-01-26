@@ -1,0 +1,14 @@
+[Unit]
+Description=Start the watering service
+
+[Service]
+Type=simple
+StandardInput=null
+StandardOutput=append:/var/log/water.log
+StandardError=inherit
+ExecStart=sudo python /home/mirror/src/makerprojects/Grow/water.py
+Restart=always
+
+[Install]
+WantedBy=default.target 
+
