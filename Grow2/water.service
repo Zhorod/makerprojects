@@ -6,7 +6,7 @@ Type=simple
 StandardInput=null
 StandardOutput=append:/var/log/water.log
 StandardError=inherit
-ExecStart=sudo python /home/mirror/src/makerprojects/Grow/water.py
+ExecStart=sudo python /home/mirror/src/makerprojects/Grow2/water.py
 Restart=always
 
 [Install]

@@ -46,7 +46,7 @@ class MoistureSensor:
           mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
           time.sleep(0.1) # delay to allow published message to be read
           print(output_string)
-          return(False)
+          return(-1)
         values[i] = reading
       
       # if we have been succesful, take the median
@@ -96,11 +96,11 @@ class MoistureSensor:
       
       # set the max raw reading to current reading
       self.raw_max = moisture_reading
-      output_string = "INFO: IrrigationSystem - manual_water_channel_1 - raw max set to %i" % (moisture_reading)
+      output_string = "INFO: IrrigationSystem - set_dry - raw max set to %i" % (moisture_reading)
       mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
       time.sleep(0.1) # delay to allow published message to be read
       print(output_string)
-      Return(True)
+      return(True)
     else:
       output_string = "ERROR: MoistureSensor - set_dry - called when not active"
       mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
@@ -132,20 +132,19 @@ class MoistureSensor:
       
       # set the max raw reading to current reading
       self.raw_min = moisture_reading
-      output_string = "INFO: IrrigationSystem - manual_water_channel_1 - raw min set to %i" % (moisture_reading)
+      output_string = "INFO: IrrigationSystem - set_wet - raw min set to %i" % (moisture_reading)
       mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
       time.sleep(0.1) # delay to allow published message to be read
       print(output_string)
+      return(True)
     else:
       output_string = "INFO: MoistureSensor - set_wet - called when not active"
       mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
       time.sleep(0.1) # delay to allow published message to be read
       print(output_string)
+      return(False)
 
-  
 
-  
-  
 # test the class works
 
 #M1 = MoistureSensor(True, 0, GAIN, 100, 9500, 19500)

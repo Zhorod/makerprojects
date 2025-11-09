@@ -53,7 +53,8 @@ class WaterLevelSensor:
       
       ping_time = self.pulse_in(GPIO.HIGH,self.timeout)
       distance = ping_time * 340.0 / 2.0 / 10000.0 # the sound speed is 340m/s, and calculate distance (cm)
-      
+      #print("the distance is %f - max is %f - min is %f"%(distance, self.full_distance, self.empty_distance))
+       
       if distance < self.full_distance:
         # the distance is less than full so either an actual error or a calibration issue
         # return 100% and send an info message
