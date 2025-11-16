@@ -1,53 +1,48 @@
-
+import datetime
 import time
 import sys
+import socket
 
-import paho.mqtt.publish as mqtt_publish
-import paho.mqtt.client as mqtt_client
 import json
-
-from datetime import date
-from datetime import datetime
-
 from irrigation_system import IrrigationSystem
 
-read_interval_time = 1800 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
+import paho.mqtt.client as mqtt
+import ssl
+import time
 
-MQTT_HOSTNAME = "test.mosquitto.org"
+# --------------------------
+# Configuration
+# --------------------------
+CLIENT_ID = "python-mqtt-client-" + str(time.time()) # Unique client ID
+BROKER_HOSTNAME = "a85dc6f63e6945e0be49d9103eb3fb6b.s1.eu.hivemq.cloud"
+PORT = 8883  # TLS port
+USERNAME = ""
+PASSWORD = ""
+
+
+READ_INTERVAL_TIME = 1200 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
     
 irrigation_system = IrrigationSystem(False)
 
 running = True  # Global flag to control loop execution
 
-def loop(local_mqtt_client):
-    global running
-    while running:
-        
-        # check to see if the irrigation system is currently watering
-        
-        if irrigation_system.watering == False:
-        
-            # update the sensor value in the Irrigation System
-            
-            irrigation_system.update()
-            
-            # if auto water is active then auto water
-            
-            irrigation_system.auto_water()
-            
-        else:
-            output_message = "INFO: water.py - loop - waiting as irrigation system currently watering"
-            print(output_message)
-            mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
-        
-        # wait for read_internal_time seconds to avoid high processor load
-        
-        sys.stdout.flush()
-        sys.stderr.flush()
-        time.sleep(read_interval_time)
+# --------------------------
+# Old-style callback functions (3 arguments)
+# --------------------------
+def on_connect(client, userdata, flags, rc):
+    # Subscribe to a topic
+    client.subscribe("pzgrow/#", 0)
+    irrigation_system.set_mqtt_client(client)
+    output_message = f"INFO: water.py - on_connect - connected with result code {rc}"
+    irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+    
+    
 
-def destroy():
-    print("Closing connections")
+#def on_message(client, userdata, msg):
+#    print(f"Received message on {msg.topic}: {msg.payload.decode()}")
+
+#def on_publish(client, userdata, mid):
+#    print(f"Message {mid} published")
 
 def on_command_message(client, userdata, msg):
     
@@ -58,272 +53,291 @@ def on_command_message(client, userdata, msg):
         message_json = json.loads(message_text)
     except Exception as e:
         output_message = "ERROR: water.py - on_command_message - could not parse message payload into JSON"
-        print(output_message)
-        mqtt_publish.single("pzgrow/error", output_message, hostname=MQTT_HOSTNAME)
-      
+        irrigation_system.publish_message_and_print("pzgrow/error", output_message)
+        
     # correct format so process 
     
     else:
         if irrigation_system.watering == True:
             output_message = "ERROR: water.py - on_command_message - could not parse message payload into JSON"
-            print(output_message)
-            mqtt_publish.single("pzgrow/error", output_message, hostname=MQTT_HOSTNAME)
+            irrigation_system.publish_message_and_print("pzgrow/error", output_message)
         else:
-            output_message = "INFO: water.py - on_command_message - received " + str(message_json["command"]["value"]) + " at time " + str(message_json["command"]["time"])
-            print(output_message)
-            mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+            output_message = "INFO: water.py - on_command_message - received - " + str(message_json["command"]["value"])
+            irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             if message_json["command"]["value"] == "Update":
                 irrigation_system.update()
                 irrigation_system.auto_water()
                 output_message = "INFO: water.py - on_command_message - updated"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Increase watering time":
                 irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds + 5
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - increased auto watering time to " + str(irrigation_system.auto_water_seconds)
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Decrease watering time":
                 irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds - 5
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - decreased auto watering time to " + str(irrigation_system.auto_water_seconds)
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Increase watering threshold":
                 irrigation_system.min_moisture = irrigation_system.min_moisture + 1
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Decrease watering threshold":
                 irrigation_system.min_moisture = irrigation_system.min_moisture - 1
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Auto water on":
                 irrigation_system.auto_water_status = True
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - auto water turned on"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Auto water off":
                 irrigation_system.auto_water_status = False
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - auto water turned off"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Manual water c1":
                 irrigation_system.manual_water_channel_1()
                 irrigation_system.update()
                 output_message = "INFO: water.py - on_command_message - manual water c1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Manual water c2":
                 irrigation_system.manual_water_channel_2()
                 irrigation_system.update()
                 output_message = "INFO: water.py - on_command_message - manual water c2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Capture image":
                 irrigation_system.capture_image()
                 output_message = "INFO: water.py - on_command_message - capture image"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1":
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - activated c1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1":
                 irrigation_system.set_channel_1_status(False)
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - deactivated c1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2":
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - activated c2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2":
                 irrigation_system.set_channel_2_status(False)
                 output_message = "INFO: water.py - on_command_message - deactivated c2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1m1":
                 irrigation_system.set_channel_1_moisture_1_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1m1-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c1m1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1m1":
                 irrigation_system.set_channel_1_moisture_1_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1m1-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c1m1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1m2":
                 irrigation_system.set_channel_1_moisture_2_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1m2-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c1m2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1m2":
                 irrigation_system.set_channel_1_moisture_2_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1m2-status", False, hostname="test.mosquitto.org")
                 output_message = "Deactivated c1m2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2m1":
                 irrigation_system.set_channel_2_moisture_1_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2m1-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c2m1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2m1":
                 irrigation_system.set_channel_2_moisture_1_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2m1-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c2m1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2m2":
                 irrigation_system.set_channel_2_moisture_2_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2m2-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated C2m2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2m2":
                 irrigation_system.set_channel_2_moisture_2_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2m2-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c2m2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1p1":
                 irrigation_system.set_channel_1_pump_1_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1p1-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c1p1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1p1":
                 irrigation_system.set_channel_1_pump_1_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1p1-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c1p1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1p2":
                 irrigation_system.set_channel_1_pump_2_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1p2-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c1p2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1p2":
                 irrigation_system.set_channel_1_pump_2_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c1p2-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c1p2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2p1":
                 irrigation_system.set_channel_2_pump_1_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2p1-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c2p1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2p1":
                 irrigation_system.set_channel_2_pump_1_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2p1-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c2p1"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2p2":
                 irrigation_system.set_channel_2_pump_2_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2p2-status", True, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - activated c2p2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2p2":
                 irrigation_system.set_channel_2_pump_2_status(False)
                 irrigation_system.write_variables()
-                mqtt_publish.single("pzgrow/c2p2-status", False, hostname="test.mosquitto.org")
                 output_message = "INFO: water.py - on_command_message - deactivated c2p2"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m1 dry":
                 irrigation_system.set_channel_1_moisture_1_dry()
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - c1m1 dry level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m1 wet":
                 irrigation_system.set_channel_1_moisture_1_wet()
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - c1m1 wet level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m2 dry":
                 irrigation_system.set_channel_1_moisture_2_dry()
                 irrigation_system.write_variables()
                 output_message = "c1m2 dry level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m2 wet":
                 irrigation_system.set_channel_1_moisture_2_wet()
                 irrigation_system.write_variables()
                 output_message = "c1m2 wet level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m1 dry":
                 irrigation_system.set_channel_2_moisture_1_dry()
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - c2m1 dry level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m1 wet":
                 irrigation_system.set_channel_2_moisture_1_wet()
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - c2m1 wet level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m2 dry":
                 irrigation_system.set_channel_2_moisture_2_dry()
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - c2m2 dry level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m2 wet":
                 irrigation_system.set_channel_2_moisture_2_wet()
                 irrigation_system.write_variables()
                 output_message = "INFO: water.py - on_command_message - c2m2 wet level set"
-                mqtt_publish.single("pzgrow/info", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             else:
                 output_message = "ERROR: water.py - on_command_message - command not recognised - " + message_json["command"]["value"]
                 print(output_message)
-                mqtt_publish.single("pzgrow/error", output_message, hostname="test.mosquitto.org")
+                irrigation_system.publish_message_and_print("pzgrow/error", output_message)
+            irrigation_system.publish_status()
 
-def on_connect(client, userdata, flags, reason_code, properties=None):
-    print(f"INFO: water - on_connect - connected with result code {reason_code}")
-    # Subscribing in on_connect() means that if we lose the connection and
-    # reconnect then subscriptions will be renewed.
-    client.subscribe("pzgrow/#", 0)
-    
-def on_message(client, userdata, msg):
-    print(msg)
-    print(userdata)
+def loop():
+    global running
+    while running:
+        
+        # check to see if the irrigation system is currently watering
+        
+        if irrigation_system.watering == False:
+        
+            # update stored sensors and if auto water is active, water if required
+            
+            irrigation_system.auto_water()
+            
+            output_message = "INFO: water.py - loop - autowatered"
+            irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            irrigation_system.publish_status()
+            
+        else:
+            output_message = "INFO: water.py - loop - waiting as irrigation system currently watering"
+            irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+        
+        # wait for read_internal_time seconds to avoid high processor load
+        time.sleep(READ_INTERVAL_TIME)
+
+def destroy():
+    output_message = "INFO: water.py - destroy - closing connections"
+    irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+
+
+# I have set BT to IPv4 so this is not required
+# May not work with the Hive MQTT serverless unless I can get an IPV4 version of the address
+# === Helper function to force IPv4 ===
+#def ipv4_host(hostname):
+#    return socket.gethostbyname(hostname)  # Returns IPv4 address
+
+#broker = ipv4_host(BROKER_HOSTNAME)  # Force IPv4        
         
 if __name__ == '__main__':
     
-    try:
-        local_mqtt_client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION2)
-    except:
-        local_mqtt_client = mqtt_client.Client()
-    local_mqtt_client.message_callback_add("pzgrow/command", on_command_message)
-    
-    local_mqtt_client.on_connect = on_connect
-    
-    local_mqtt_client.connect("test.mosquitto.org", 1883, 60)
-    local_mqtt_client.subscribe("pzgrow/#", 0)
+    # --------------------------
+    # Create MQTT client
+    # --------------------------
+    client = mqtt.Client(client_id=CLIENT_ID)
 
-    local_mqtt_client.loop_start()
-    print("INFO: water - main - starting")
+    # Set callbacks
+    client.on_connect = on_connect
+    client.message_callback_add("pzgrow/command", on_command_message)
     
+    #client.on_command_message = on_command_message
+
+    # Enable TLS
+    client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+
+    # Set username/password
+    client.username_pw_set(USERNAME, PASSWORD)
+
+    # Connect to broker
+    client.connect(BROKER_HOSTNAME, PORT, keepalive=60)
+    
+    # Start the network loop
+    client.loop_start()
+
+    # Keep running to receive messages
     try:
-        loop(local_mqtt_client)
-        
+        while True:
+            loop()
     except KeyboardInterrupt:
-        print("INFO: water- main - interrupt received")
-        running = False  # Stop the loop gracefully
-
+        client.loop_stop()
+        client.disconnect()
     finally:
+        output_message = "INFO - water - main - cleaned up - exiting"
+        irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+        client.loop_stop()
+        client.disconnect()
         destroy()
-        local_mqtt_client.loop_stop()
-        local_mqtt_client.disconnect()
-        print("INFO - water - main - cleaned up - exiting")
+

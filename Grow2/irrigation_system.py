@@ -1,8 +1,9 @@
 import RPi.GPIO as GPIO
 import time
+import datetime
 import sys
-import paho.mqtt.publish as mqtt_publish
-import paho.mqtt.client as mqtt_client
+#import paho.mqtt.publish as mqtt_publish
+import paho.mqtt.client as mqtt
 
 from picamera import PiCamera
 
@@ -19,7 +20,9 @@ MAXIMUM_MOISTURE_DIFFERENCE = 10 # max perent difference between primary and sec
 EXPECTED_RANGE_MIN = -10 # percentage should not go below this unless an error or really poor calibration
 EXPECTED_RANGE_MAX = 110 # percentage should not go above this unless an error or really poor calibration
 GAIN = 1 # the adc gain
-MQTT_HOSTNAME = "test.mosquitto.org"
+MQTT_HOSTNAME = "a85dc6f63e6945e0be49d9103eb3fb6b.s1.eu.hivemq.cloud"
+#MQTT_HOSTNAME = "broker.hivemq.com"
+#MQTT_HOSTNAME = "test.mosquitto.org"
 MIN_MOISTURE = 95 # minimum moisture precentage before watering
 AUTO_WATER_SECONDS = 20 # default number of seconds to water for when auto watering
 MANUAL_WATER_SECONDS = 10 # default number of seconds to water for when manual watering
@@ -35,13 +38,12 @@ class IrrigationSystem:
     self.manual_water_seconds = MANUAL_WATER_SECONDS
     self.auto_water_seconds = AUTO_WATER_SECONDS
     self.watering = False
+    self.mqtt_client = None
     
     try:
       GPIO.setmode(GPIO.BOARD) #numbers GPIOs by physical location)
     except:
-      output_string = "INFO: IrrigationSystem - init - GPIO model already set"
-      mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      print(output_string)
+      self.publish_message("pzgrow/info","INFO: IrrigationSystem - init - GPIO model already set")
 
     # create athe two channels
     # pins and ADC channels hard coded
@@ -74,25 +76,87 @@ class IrrigationSystem:
       self.write_variables()
       
     # update moisture readings
-    self.channel_1.update()
-    self.channel_2.update()
+    #self.channel_1.update()
+    #self.channel_2.update()
+    
+    # publish status
+    #self.publish_status()
    
     
   def __del__(self):
     GPIO.cleanup()
     return(True)
     
-  def capture_image(self):
-    camera = PiCamera()
-    now = time.localtime(time.time())
-    filename = '/home/mirror/Desktop/Images/image -'+time.strftime("%c", now)+'.jpg'
-    #filename = '/home/mirror/Desktop/Images/image.jpg'
-    camera.rotation = 180
-    camera.capture(filename)
-    output_string = "INFO: IrrigationSystem - capture_image - captured image -'%s'"%(filename)
-    mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
+  def set_mqtt_client(self, mqtt_client):
+    self.mqtt_client = mqtt_client
+    self.channel_1.set_mqtt_client(mqtt_client)
+    self.channel_2.set_mqtt_client(mqtt_client)
+    
+    
+  def publish_message(self, topic, output_string):
+    # this function publishes the message as is i.e. with no additional time stape - used for indicators rather than text notifications
+    try:
+      #mqtt_publish.single(topic, output_string, hostname=MQTT_HOSTNAME)
+      self.mqtt_client.publish(topic, output_string,qos=1)
+    except:
+      error_message = "ERROR: IrrigationSystem - publish_message - error in mqtt publish - " + str(output_string) + " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
+      print(error_message)
+    time.sleep(0.1) # delay to allow published message to be read
+    
+  def print_message(self, output_string):
+    output_message = output_string +  " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
     print(output_string)
     time.sleep(0.1) # delay to allow published message to be read
+    sys.stdout.flush()
+  
+  def publish_message_and_print(self, topic, output_string):
+    # this function publishes and prints the message with a time stamp added for textual notifications
+    output_message = output_string +  " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
+    try:
+      self.mqtt_client.publish(topic, output_message,qos=1)
+      #mqtt_publish.single(topic, output_message, hostname=MQTT_HOSTNAME)
+    except:
+      error_message = "ERROR: IrrigationSystem - publish_message - error publishing - " + str(output_string) + " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
+      print(error_message)
+    print(output_message)
+    time.sleep(0.1) # delay to allow published message to be read
+    sys.stdout.flush()
+    
+  def publish_status(self):
+    self.publish_message("pzgrow/wl-status", self.water_level.active)
+    self.publish_message("pzgrow/c1-status", self.channel_1.active)
+    self.publish_message("pzgrow/c2-status", self.channel_2.active)
+    self.publish_message("pzgrow/c1m1-status", self.channel_1.moisture_1.active)
+    self.publish_message("pzgrow/c1m2-status", self.channel_1.moisture_2.active)
+    self.publish_message("pzgrow/c1p1-status", self.channel_1.pump_1.active)
+    self.publish_message("pzgrow/c1p2-status", self.channel_1.pump_2.active)
+    self.publish_message("pzgrow/c2m1-status", self.channel_2.moisture_1.active)
+    self.publish_message("pzgrow/c2m2-status", self.channel_2.moisture_2.active)
+    self.publish_message("pzgrow/c2p1-status", self.channel_2.pump_1.active)
+    self.publish_message("pzgrow/c2p2-status", self.channel_2.pump_2.active)
+    self.publish_message("pzgrow/c1m1", self.channel_1.moisture_1_value)
+    self.publish_message("pzgrow/c1m2", self.channel_1.moisture_2_value)
+    self.publish_message("pzgrow/c1mav", self.channel_1.moisture_combined_value)
+    self.publish_message("pzgrow/c2m1", self.channel_2.moisture_1_value)
+    self.publish_message("pzgrow/c2m2", self.channel_2.moisture_2_value)
+    self.publish_message("pzgrow/c2mav", self.channel_2.moisture_combined_value)
+    self.publish_message("pzgrow/wl", self.water_level_value)
+    self.publish_message("pzgrow/wl-status", self.water_level.active)
+      
+  def capture_image(self):
+    try:
+      camera = PiCamera()
+      now = time.localtime(time.time())
+      filename = '/home/mirror/Desktop/Images/image -'+ time.strftime("%c", now)+'.jpg'
+      camera.rotation = 180
+      camera.capture(filename)
+    
+      output_string = "INFO: IrrigationSystem - capture_image - captured image"
+      self.publish_message_and_print("pzgrow/info",output_string)
+    except:
+      output_string = "ERROR: IrrigationSystem - capture_image - error when trying to capture image"
+      self.publish_message_and_print("pzgrow/error",output_string)
+    
     camera.close()
     
   def write_variables(self):
@@ -106,9 +170,7 @@ class IrrigationSystem:
         # there was a problem opening the log file
         # write a message to stdout
         output_string = "ERROR: IrrigationSystem - write_variables - error opening file " + VARIABLE_FILENAME
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
-        time.sleep(0.1) # delay to allow published message to be read
+        self.publish_message_and_print("pzgrow/error",output_string)
         return false
         
     # write the parameters
@@ -141,28 +203,7 @@ class IrrigationSystem:
     variable_file.close()
     
     # update the panel with current status
-    mqtt_publish.single("pzgrow/wl-status", self.water_level.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1-status", self.channel_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2-status", self.channel_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1m1-status", self.channel_1.moisture_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1m2-status", self.channel_1.moisture_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1p1-status", self.channel_1.pump_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1p2-status", self.channel_1.pump_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2m1-status", self.channel_2.moisture_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2m2-status", self.channel_2.moisture_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2p1-status", self.channel_2.pump_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2p2-status", self.channel_2.pump_2.active, hostname=MQTT_HOSTNAME)
-    
-    mqtt_publish.single("pzgrow/c1m1", self.channel_1.moisture_1_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1m2", self.channel_1.moisture_2_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1mav", self.channel_1.moisture_combined_value, hostname=MQTT_HOSTNAME)
-    
-    mqtt_publish.single("pzgrow/c2m1", self.channel_2.moisture_1_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2m2", self.channel_2.moisture_2_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2mav", self.channel_2.moisture_combined_value, hostname=MQTT_HOSTNAME)
-    
-    mqtt_publish.single("pzgrow/wl", self.water_level_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/wl-status", self.water_level.active, hostname=MQTT_HOSTNAME)
+    self.publish_status()
     
   def read_variables(self):
     
@@ -175,9 +216,7 @@ class IrrigationSystem:
         # there was a problem opening the log file
         # write a message to stdout
         output_string = "ERROR: IrrigationSystem - read_variables - error opening file " + VARIABLE_FILENAME
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
-        time.sleep(0.1) # delay to allow published message to be read
+        self.publish_message_and_print("pzgrow/error", output_string)
         return False
         
     # read the parameters
@@ -240,88 +279,26 @@ class IrrigationSystem:
     self.auto_water_seconds = int(values[22])
     self.min_water = int(values[23])
     
-    
     variable_file.close()
     
     # update the values
-    self.update()
+    #self.update()
     
     # update the panel with current status
-    mqtt_publish.single("pzgrow/wl-status", self.water_level.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1-status", self.channel_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2-status", self.channel_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1m1-status", self.channel_1.moisture_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1m2-status", self.channel_1.moisture_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1p1-status", self.channel_1.pump_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1p2-status", self.channel_1.pump_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2m1-status", self.channel_2.moisture_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2m2-status", self.channel_2.moisture_2.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2p1-status", self.channel_2.pump_1.active, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2p2-status", self.channel_2.pump_2.active, hostname=MQTT_HOSTNAME)
-    
-    mqtt_publish.single("pzgrow/c1m1", self.channel_1.moisture_1_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1m2", self.channel_1.moisture_2_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c1mav", self.channel_1.moisture_combined_value, hostname=MQTT_HOSTNAME)
-    
-    mqtt_publish.single("pzgrow/c2m1", self.channel_2.moisture_1_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2m2", self.channel_2.moisture_2_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/c2mav", self.channel_2.moisture_combined_value, hostname=MQTT_HOSTNAME)
-    
-    mqtt_publish.single("pzgrow/wl", self.water_level_value, hostname=MQTT_HOSTNAME)
-    mqtt_publish.single("pzgrow/wl-status", self.water_level.active, hostname=MQTT_HOSTNAME)
-    
+    #self.publish_status()
+
   def set_min_moisture(self, min_moisture):
     if min_moisture != self.min_moisture:
       self.min_moisture = min_moisture
       self.channel_1.min_moisture = self.min_moisture
       self.channel_2.min_moisture = self.min_moisture
       output_string = "INFO: IrrigationSystem - set_min_moisture - min moisture set to " + str(self.min_moisture)
-      mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-      print(output_string)
+      self.publish_message_and_print("pzgrow/info", output_string)
   
-  def update(self):
-    
-    # check to see if we are currently in a water cycle - required due to use of GPIO and threading
-    
-    if self.watering == False:
-      
-      # update the status of the channels, sensors and pumps
-      mqtt_publish.single("pzgrow/wl-status", self.water_level.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1-status", self.channel_1.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2-status", self.channel_2.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1m1-status", self.channel_1.moisture_1.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1m2-status", self.channel_1.moisture_2.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1p1-status", self.channel_1.pump_1.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1p2-status", self.channel_1.pump_2.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2m1-status", self.channel_2.moisture_1.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2m2-status", self.channel_2.moisture_2.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2p1-status", self.channel_2.pump_1.active, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2p2-status", self.channel_2.pump_2.active, hostname=MQTT_HOSTNAME)
-      
-      # update the waterlevel and publish values
-      self.water_level_value = self.water_level.get_water_level()
-      mqtt_publish.single("pzgrow/wl", self.water_level_value, hostname=MQTT_HOSTNAME)
-      
-      # update each channel and publish buffered moisture values
-      self.channel_1.update()
-      mqtt_publish.single("pzgrow/c1m1", self.channel_1.moisture_1_value, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1m2", self.channel_1.moisture_2_value, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c1mav", self.channel_1.moisture_combined_value, hostname=MQTT_HOSTNAME)
-      self.channel_2.update()
-      mqtt_publish.single("pzgrow/c2m1", self.channel_2.moisture_1_value, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2m2", self.channel_2.moisture_2_value, hostname=MQTT_HOSTNAME)
-      mqtt_publish.single("pzgrow/c2mav", self.channel_2.moisture_combined_value, hostname=MQTT_HOSTNAME)
-      
-    else:
-      output_string = "INFO: IrrigationSystem - update - update paused as system currently watering"
-      mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-      print(output_string)
-    
   def manual_water_channel_1(self):
     if self.watering == True:
       output_string = "INFO: IrrigationSystem - manual_water_channel_1 - already watering"
-      mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-      print(output_string)
+      self.publish_message_and_print("pzgrow/info", output_string)
       return(False)
     else:
       if self.water_level_value > WATER_LOW:
@@ -334,20 +311,17 @@ class IrrigationSystem:
           return(True)
         else:
           output_string = "ERROR: IrrigationSystem - manual_water_channel_1 - there was an error when manual watering"
-          mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-          print(output_string)
+          self.publish_message_and_print("pzgrow/error", output_string)
           return(False)
       else:
         output_string = "ERROR: IrrigationSystem - manual_water_channel_1 - not enough water - " + self.water_level_value
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
+        self.publish_message_and_print("pzgrow/error", output_string)
         return(False)
         
   def manual_water_channel_2(self):
     if self.watering == True:
       output_string = "INFO: IrrigationSystem - manual_water_channel_ - already watering"
-      mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-      print(output_string)
+      self.publish_message_and_print("pzgrow/info", output_string)
       return(False)
     else:
       if self.water_level_value > WATER_LOW:
@@ -360,28 +334,41 @@ class IrrigationSystem:
           return(True)
         else:
           output_string = "ERROR: IrrigationSystem - manual_water_channel_2 - there was an error when manual watering"
-          mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-          print(output_string)
+          self.publish_message_and_print("pzgrow/error", output_string)
           return(False)
       else:
         output_string = "ERROR: IrrigationSystem - manual_water_channel_2 - not enough water - " + self.water_level_value
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
+        self.publish_message_and_print("pzgrow/error", output_string)
         return(False)
+  
+  def update(self):
+    self.water_level_value = self.water_level.get_water_level()
+    self.channel_1.update()
+    self.channel_2.update()
+    self.publish_status()
     
   def auto_water(self):
-    if self.auto_water_status == True:
-      if self.watering == True:
-        output_string = "INFO: IrrigationSystem - auto_water - already watering"
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
-        time.sleep(0.1) # delay to allow published message to be read
-        return(False)
-      else:
+    # update all stored sensors values and decide if watering is required
+    
+    if self.watering == False:
+      
+      # im not in the process of watering - pumps not running
+          
+      self.update()
+
+      if self.auto_water_status == True:
+        
+        # autowater is on
+        
         if self.water_level_value > WATER_LOW:
+          
           # there is enough water, so water
+          
           return_value = True;
           if self.channel_1.active == True:
+            
+            # channel 1 is active, so water
+          
             self.watering = True
             watering_flag = self.channel_1.auto_water(self.auto_water_seconds)
             if watering_flag == False:
@@ -389,15 +376,17 @@ class IrrigationSystem:
             self.watering = False
             if watering_flag == False:
               output_string = "ERROR: IrrigationSystem - auto_water - there was an error when auto watering on channel 1"
-              mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-              time.sleep(0.1) # delay to allow published message to be read
-              print(output_string)
+              self.publish_message_and_print("pzgrow/error", output_string)
           else:
+            
+            # channel 1 is not active, so water
+            
             output_string = "INFO: IrrigationSystem - auto_water - channel 1 is not active"
-            print(output_string)
-            mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-            time.sleep(0.1) # delay to allow published message to be read
+            self.publish_message_and_print("pzgrow/info", output_string)
           if self.channel_2.active == True:
+            
+            # channel w is active, so water
+          
             self.watering = True;
             watering_flag = self.channel_2.auto_water(self.auto_water_seconds)
             if watering_flag == False:
@@ -405,47 +394,46 @@ class IrrigationSystem:
             self.watering = False;
             if watering_flag == False:
               output_string = "ERROR: IrrigationSystem - auto_water - there was an error when auto watering on channel 2"
-              mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-              time.sleep(0.1) # delay to allow published message to be read
-              print(output_string)
+              self.publish_message_and_print("pzgrow/error", output_string)
           else:
+            
+            # channel 2 is not active, so water
+            
             output_string = "INFO: IrrigationSystem - auto_water - channel 2 is not active"
-            mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-            time.sleep(0.1) # delay to allow published message to be read
-            print(output_string)
-          self.update()
+            self.publish_message_and_print("pzgrow/info", output_string)
           return(return_value)
         else:
           output_string = "ERROR: IrrigationSystem - auto_water - not enough water - level is " + self.water_level_value
-          mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-          print(output_string)
-          time.sleep(0.1) # delay to allow published message to be read
+          self.publish_message_and_print("pzgrow/error", output_string)
           return(False)
+      
     else:
-      output_string = "INFO: IrrigationSystem - auto_water - auto water not active"
-      mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(False)
+      output_string = "INFO: IrrigationSystem - update - update paused as system currently watering"
+      self.publish_message_and_print("pzgrow/info", output_string)
+      
+    return(False)
+    
+    output_string = "INFO: IrrigationSystem - auto_water - auto water not active"
+    self.publish_message_and_print("pzgrow/info", output_string)
     
   def set_channel_1_status(self, status):
-    mqtt_publish.single("pzgrow/c1-status", status, hostname=MQTT_HOSTNAME)
+    self.publish_message("pzgrow/c1-status", status)
     self.channel_1.active = status
     if(status == False):
       
       # channel is inactive so set status of components to inactive
       
       self.channel_1.moisture_1.active = False
-      mqtt_publish.single("pzgrow/c1m1-status", status, hostname=MQTT_HOSTNAME)
+      #self.publish_message("pzgrow/c1m1-status", status)
       self.channel_1.moisture_2.active = False
-      mqtt_publish.single("pzgrow/c1m2-status", status, hostname=MQTT_HOSTNAME)
+      #self.publish_message("pzgrow/c1m2-status", status)
       self.channel_1.pump_1.active = False
-      mqtt_publish.single("pzgrow/c1p1-status", status, hostname=MQTT_HOSTNAME)
+      #self.publish_message("pzgrow/c1p1-status", status)
       self.channel_1.pump_2.active = False
-      mqtt_publish.single("pzgrow/c1p2-status", status, hostname=MQTT_HOSTNAME)
-        
+      #self.publish_message("pzgrow/c1p2-status", status)
+
   def set_channel_2_status(self, status):
-    mqtt_publish.single("pzgrow/c2-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c2-status", status)
     # set the status of the channel to status
     self.channel_2.active = status
     if(status == False):
@@ -453,44 +441,44 @@ class IrrigationSystem:
       # channel is inactive so set status of components to inactive
       
       self.channel_2.moisture_1.active = False
-      mqtt_publish.single("pzgrow/c2m1-status", status, hostname=MQTT_HOSTNAME)
+      #self.publish_message("pzgrow/c2m1-status", status)
       self.channel_2.moisture_2.active = False
-      mqtt_publish.single("pzgrow/c2m2-status", status, hostname=MQTT_HOSTNAME)
+      #self.publish_message("pzgrow/c2m2-status", status)
       self.channel_2.pump_1.active = False
-      mqtt_publish.single("pzgrow/c2p1-status", status, hostname=MQTT_HOSTNAME)
+      #self.publish_message("pzgrow/c2p1-status", status)
       self.channel_2.pump_2.active = False
-      mqtt_publish.single("pzgrow/c2p2-status", status, hostname=MQTT_HOSTNAME)
-  
+      #self.publish_message("pzgrow/c2p2-status", status)
+
   def set_channel_1_moisture_1_status(self, status):
-    mqtt_publish.single("pzgrow/c1m1-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c1m1-status", status)
     self.channel_1.moisture_1.active = status
         
   def set_channel_1_moisture_2_status(self, status):
-    mqtt_publish.single("pzgrow/c1m2-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c1m2-status", status)
     self.channel_1.moisture_2.active = status
    
   def set_channel_2_moisture_1_status(self, status):
-    mqtt_publish.single("pzgrow/c2m1-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c2m1-status", status)
     self.channel_2.moisture_1.active = status
         
   def set_channel_2_moisture_2_status(self, status):
-    mqtt_publish.single("pzgrow/c2m2-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c2m2-status", status)
     self.channel_2.moisture_2.active = status
    
   def set_channel_1_pump_1_status(self, status):
-    mqtt_publish.single("pzgrow/c1p1-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c1p1-status", status)
     self.channel_1.pump_1.active = status
         
   def set_channel_1_pump_2_status(self, status):
-    mqtt_publish.single("pzgrow/c1p2-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c1p2-status", status)
     self.channel_1.pump_2.active = status
    
   def set_channel_2_pump_1_status(self, status):
-    mqtt_publish.single("pzgrow/c2p1-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c2p1-status", status)
     self.channel_2.pump_1.active = status
         
   def set_channel_2_pump_2_status(self, status):
-    mqtt_publish.single("pzgrow/c2p2-status", status, hostname=MQTT_HOSTNAME)
+    #self.publish_message("pzgrow/c2p2-status", status)
     self.channel_2.pump_2.active = status
    
   def set_channel_1_moisture_1_dry(self):
@@ -546,6 +534,20 @@ class IrrigationSystem:
       self.moisture_2_value = -1
       self.moisture_combined_value = -1
       self.min_moisture = MIN_MOISTURE
+      self.mqtt_client = None
+    
+    def set_mqtt_client(self, mqtt_client):
+      self.mqtt_client = mqtt_client
+       
+    def publish_message_and_print(self, topic, output_string):
+      output_message = output_string +  " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
+      try:
+        self.mqtt_client.publish(topic, output_message,qos=1)
+      except:
+        print("ERROR: IrrigationSystem - publish_message_and_print - error in mqtt publish - '" + output_string + "' to '" + topic + "'")
+      print(output_message)
+      time.sleep(0.1) # delay to allow published message to be read
+      sys.stdout.flush()
       
     def auto_water(self, seconds):
       if self.moisture_1.active == True or self.moisture_2.active == True:
@@ -555,29 +557,22 @@ class IrrigationSystem:
           if self.pump_1.active == True:
             self.pump_1.run_pump(seconds)
             output_string = "INFO: IrrigationSystemChannel - auto_water - ran pump 1  on channel " + self.name 
-            mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-            print(output_string)
+            self.publish_message_and_print("pzgrow/info", output_string)
             return(True)
           elif self.pump_2.active == True:
             self.pump_2.run_pump(seconds)
             output_string = "INFO: IrrigationSystemChannel - auto_water - ran pump 2 on channel " + self.name 
-            mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-            print(output_string)
+            self.publish_message_and_print("pzgrow/info", output_string)
             return(True)
           else:
             output_string = "ERROR: IrrigationSystemChannel - auto_water - no active pumps on channel " + self.name
-            mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-            print(output_string)
+            self.publish_message_and_print("pzgrow/error", output_string)
             return(False)
         else:
-          #output_string = "INFO: IrrigationSystemChannel - auto_water - moisture (" + str(self.moisture_combined_value) + ") > threshold (" + str(self.min_moisture) + ") on channel " + self.name 
-          #mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-          #print(output_string)
           return(True)
       else:
         output_string = "ERROR: IrrigationSystemChannel - auto_water - no active mositure sensor on channel " + self.name 
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
+        self.publish_message_and_print("pzgrow/error", output_string)
         return(False)
             
     def manual_water(self, seconds):
@@ -587,20 +582,16 @@ class IrrigationSystem:
       if self.pump_1.active == True:
         self.pump_1.run_pump(seconds)
         output_string = "INFO: IrrigationSystemChannel - manual_water - ran pump 1 on channel " + self.name
-        mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
+        self.publish_message_and_print("pzgrow/info", output_string)
         return(True)
       elif self.pump_2.active == True:
         self.pump_2.run_pump(seconds)
         output_string = "INFO: IrrigationSystemChannel - manual_water - ran pump 2 on channel " + self.name
-        mqtt_publish.single("pzgrow/info", output_string, hostname=MQTT_HOSTNAME)
-        print(output_string)
+        self.publish_message_and_print("pzgrow/info", output_string)
         return(True)
       else:
         output_string = "ERROR: IrrigationSystemChannel - manual_water - no active pumps on channel " + self.name
-        mqtt_publish.single("pzgrow/error", output_string, hostname=MQTT_HOSTNAME)
-        time.sleep(0.1) # delay to allow published message to be read
-        print(output_string)
+        self.publish_message_and_print("pzgrow/error", output_string)
         return(False)
     
     def update(self):
