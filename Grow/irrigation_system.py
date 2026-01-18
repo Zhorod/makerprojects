@@ -93,7 +93,7 @@ class IrrigationSystem:
     
   def publish_settings(self):
     output_string = \
-    f"INFO: irrigation_system.py - publish_config - " \
+    f"INFO: irrigation_system.py - publish_settings - " \
     f"[autowater status: {self.auto_water_status}] " \
     f"[autowater seconds:\t{self.auto_water_seconds}] " \
     f"[autowater threshold:\t{self.min_moisture}]"
