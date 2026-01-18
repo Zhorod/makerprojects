@@ -6,7 +6,7 @@ import sys
 import paho.mqtt.client as mqtt
 import subprocess
 
-from picamera import PiCamera
+from picamera import PiCamera, PiCameraError
 
 from water_pump import WaterPump
 from moisture_sensor import MoistureSensor
@@ -120,13 +120,13 @@ class IrrigationSystem:
     # this function publishes and prints the message with a time stamp added for textual notifications
     output_message = output_string +  " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
     try:
-      self.mqtt_client.publish(topic, output_message,qos=2)
+      self.mqtt_client.publish(topic, output_message,qos=0)
       #mqtt_publish.single(topic, output_message, hostname=MQTT_HOSTNAME)
     except:
       error_message = "ERROR: IrrigationSystem - publish_message and print - error publishing - " + str(output_string) + " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
       print(error_message)
+    time.sleep(0.1) # delay to allow published message to be read
     print(output_message)
-    time.sleep(0.2) # delay to allow published message to be read
     sys.stdout.flush()
     
   def publish_status(self):
@@ -181,7 +181,7 @@ class IrrigationSystem:
           self.publish_message_and_print("pzgrow/info", output_string)
 
     # 2. Catch specific exceptions if possible to provide more useful error messages
-    except PiCamera.exc.PiCameraError as e:
+    except PiCameraError as e:
 
       output_string = f"ERROR: IrrigationSystem - capture_image - PiCamera error: {e}"
       self.publish_message_and_print("pzgrow/error", output_string)

@@ -60,206 +60,206 @@ def on_command_message(client, userdata, msg):
             irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             if message_json["command"]["value"] == "Update":
                 irrigation_system.update()
-                output_message = "INFO: water.py - on_command_message - updated"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - updated"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Settings":
                 irrigation_system.publish_settings()
-                output_message = "INFO: water.py - on_command_message - output settings"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - output settings"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Increase watering time":
                 irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds + 5
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - increased auto watering time to " + str(irrigation_system.auto_water_seconds)
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - increased auto watering time to " + str(irrigation_system.auto_water_seconds)
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Decrease watering time":
                 irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds - 5
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - decreased auto watering time to " + str(irrigation_system.auto_water_seconds)
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - decreased auto watering time to " + str(irrigation_system.auto_water_seconds)
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Increase watering threshold":
                 irrigation_system.min_moisture = irrigation_system.min_moisture + 1
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Decrease watering threshold":
                 irrigation_system.min_moisture = irrigation_system.min_moisture - 1
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Auto water on":
                 irrigation_system.auto_water_status = True
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - auto water turned on"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - auto water turned on"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Auto water off":
                 irrigation_system.auto_water_status = False
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - auto water turned off"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - auto water turned off"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Manual water c1":
                 irrigation_system.manual_water_channel_1()
-                output_message = "INFO: water.py - on_command_message - ran manual water c1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - ran manual water c1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Manual water c2":
                 irrigation_system.manual_water_channel_2()
-                output_message = "INFO: water.py - on_command_message - ran manual water c2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - ran manual water c2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Capture image":
                 irrigation_system.capture_image()
-                output_message = "INFO: water.py - on_command_message - capture image"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - capture image"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1":
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1":
                 irrigation_system.set_channel_1_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2":
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2":
                 irrigation_system.set_channel_2_status(False)
-                output_message = "INFO: water.py - on_command_message - deactivated c2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1m1":
                 irrigation_system.set_channel_1_moisture_1_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c1m1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c1m1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1m1":
                 irrigation_system.set_channel_1_moisture_1_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c1m1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c1m1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1m2":
                 irrigation_system.set_channel_1_moisture_2_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c1m2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c1m2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1m2":
                 irrigation_system.set_channel_1_moisture_2_status(False)
                 irrigation_system.write_variables()
-                output_message = "Deactivated c1m2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "Deactivated c1m2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2m1":
                 irrigation_system.set_channel_2_moisture_1_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c2m1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c2m1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2m1":
                 irrigation_system.set_channel_2_moisture_1_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c2m1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c2m1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2m2":
                 irrigation_system.set_channel_2_moisture_2_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated C2m2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated C2m2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2m2":
                 irrigation_system.set_channel_2_moisture_2_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c2m2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c2m2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1p1":
                 irrigation_system.set_channel_1_pump_1_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c1p1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c1p1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1p1":
                 irrigation_system.set_channel_1_pump_1_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c1p1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c1p1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c1p2":
                 irrigation_system.set_channel_1_pump_2_status(True)
                 irrigation_system.set_channel_1_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c1p2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c1p2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c1p2":
                 irrigation_system.set_channel_1_pump_2_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c1p2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c1p2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2p1":
                 irrigation_system.set_channel_2_pump_1_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c2p1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c2p1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2p1":
                 irrigation_system.set_channel_2_pump_1_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c2p1"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c2p1"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Activate c2p2":
                 irrigation_system.set_channel_2_pump_2_status(True)
                 irrigation_system.set_channel_2_status(True)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - activated c2p2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - activated c2p2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Deactivate c2p2":
                 irrigation_system.set_channel_2_pump_2_status(False)
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - deactivated c2p2"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - deactivated c2p2"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m1 dry":
                 irrigation_system.set_channel_1_moisture_1_dry()
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - c1m1 dry level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - c1m1 dry level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m1 wet":
                 irrigation_system.set_channel_1_moisture_1_wet()
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - c1m1 wet level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - c1m1 wet level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m2 dry":
                 irrigation_system.set_channel_1_moisture_2_dry()
                 irrigation_system.write_variables()
-                output_message = "c1m2 dry level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "c1m2 dry level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c1m2 wet":
                 irrigation_system.set_channel_1_moisture_2_wet()
                 irrigation_system.write_variables()
-                output_message = "c1m2 wet level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "c1m2 wet level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m1 dry":
                 irrigation_system.set_channel_2_moisture_1_dry()
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - c2m1 dry level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - c2m1 dry level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m1 wet":
                 irrigation_system.set_channel_2_moisture_1_wet()
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - c2m1 wet level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - c2m1 wet level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m2 dry":
                 irrigation_system.set_channel_2_moisture_2_dry()
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - c2m2 dry level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - c2m2 dry level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Set c2m2 wet":
                 irrigation_system.set_channel_2_moisture_2_wet()
                 irrigation_system.write_variables()
-                output_message = "INFO: water.py - on_command_message - c2m2 wet level set"
-                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+                #output_message = "INFO: water.py - on_command_message - c2m2 wet level set"
+                #irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             else:
                 output_message = "ERROR: water.py - on_command_message - command not recognised - " + message_json["command"]["value"]
                 print(output_message)
                 irrigation_system.publish_message_and_print("pzgrow/error", output_message)
-            irrigation_system.publish_status()
+            #irrigation_system.publish_status()
 
 def loop():
     global running

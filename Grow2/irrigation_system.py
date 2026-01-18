@@ -6,7 +6,8 @@ import sys
 import paho.mqtt.client as mqtt
 import subprocess
 
-from picamera import PiCamera
+from picamera import PiCamera, PiCameraError  # Import the class and base exception
+
 
 from water_pump import WaterPump
 from moisture_sensor import MoistureSensor
@@ -181,7 +182,7 @@ class IrrigationSystem:
           self.publish_message_and_print("pzgrow/info", output_string)
 
     # 2. Catch specific exceptions if possible to provide more useful error messages
-    except PiCamera.exc.PiCameraError as e:
+    except PiCameraError as e:
 
       output_string = f"ERROR: IrrigationSystem - capture_image - PiCamera error: {e}"
       self.publish_message_and_print("pzgrow/error", output_string)
