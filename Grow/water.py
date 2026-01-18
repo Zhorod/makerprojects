@@ -1,402 +1,345 @@
-import RPi.GPIO as GPIO
-import time
-import Adafruit_ADS1x15
-import math
 import datetime
+import time
 import sys
+import socket
 
-from datetime import date
-from datetime import datetime
+import json
+from irrigation_system import IrrigationSystem
 
-adc=Adafruit_ADS1x15.ADS1115()
+import paho.mqtt.client as mqtt
+import ssl
+import time
 
-#set parameters
+# --------------------------
+# Configuration
+# --------------------------
 
-#gain for adc - default to 1
-GAIN=1
-
-# pins for water pumps
-PUMP_PIN_1=7
-PUMP_PIN_2=11
-PUMP_PIN_3=13
-PUMP_PIN_4=15
-
-#set variables
-
-moisture_1_max = 19500 # calibrate from sensor
-moisture_2_max = 19500
-moisture_3_max = 19500
-moisture_4_max = 19500
-
-moisture_1_min = 9500 # calibrate from sensor
-moisture_2_min = 9500
-moisture_3_min = 9500
-moisture_4_min = 9500
-
-moisture_1_range = 10000 # calibrate from sensor
-moisture_2_range = 10000
-moisture_3_range = 10000
-moisture_4_range = 10000
-
-moisture_1_reading = 0 # globals to store the raw moisture readings
-moisture_2_reading = 0
-moisture_3_reading = 0
-moisture_4_reading = 0
-
-moisture_1_percent = 0 # globals to store the moisture readings as percentages
-moisture_2_percent = 0
-moisture_3_percent = 0
-moisture_4_percent = 0
-
-start_watering = 70 # start watering when the moisture percentage is less than this percentage
-stop_watering = 80 # stop watering when the moisture percentage is more than this percentage
-
-pump_1_time = 35.0 # seconds - default 5.0
-pump_2_time = 35.0 # seconds - default 5.0
-pump_3_time = 35.0 # seconds - defailt 5.0
-pump_4_time = 35.0 # seconds - default 5.0
-
-pump_1_error = False
-pump_2_error = False
-pump_3_error = False
-pump_4_error = False
-
-read_interval_time = 3600 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
-water_interval_time = 600 #seconds - this is the delay between pumps to allow water to spread to sensor - default 600 (10 mins)
-
-max_water_cycles = 5 # the maximum number of water cycles before an error occurs - once triggered on a specific pump, pump wont water
-
-moisture_data_file_name = "/home/mirror/GrowFiles/grow_moisture_data.txt"
-moisture_log_file_name = "/home/mirror/GrowFiles/grow_log_data.txt"
+CLIENT_ID = "python-mqtt-client-" + str(time.time()) # Unique client ID
+BROKER_HOSTNAME = "a85dc6f63e6945e0be49d9103eb3fb6b.s1.eu.hivemq.cloud"
+PORT = 8883  # TLS port
+USERNAME = "GrowControl"
+PASSWORD = "Gr0wplants"
 
 
-def setup():
-    GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(PUMP_PIN_1, GPIO.OUT)
-    GPIO.output(PUMP_PIN_1, GPIO.HIGH)
-    GPIO.setup(PUMP_PIN_2, GPIO.OUT)
-    GPIO.output(PUMP_PIN_2, GPIO.HIGH)
-    GPIO.setup(PUMP_PIN_3, GPIO.OUT)
-    GPIO.output(PUMP_PIN_3, GPIO.HIGH)
-    GPIO.setup(PUMP_PIN_4, GPIO.OUT)
-    GPIO.output(PUMP_PIN_4, GPIO.HIGH)
-    time.sleep(0.5)
-    write_log_message("setup complete")
+READ_INTERVAL_TIME = 30 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
     
-def water_1():
-    
-    # declare the global so we can change it if needed
-    global pump_1_error
-    
-    # read the moisture level and store a local so we can test change after watering
-    read_moisture_1()
-    local_moisture_level_start = moisture_1_percent
-    write_log_message("watering 1: start moisture: %i" % (moisture_1_percent))
-    
-    # run the pump for pump_1_seconds seconds
-    run_pump_1(pump_1_time)
-    
-    # wait for water_interval_time to let the water spread before checking it has worked
-    time.sleep(water_interval_time)
-    
-    # read the moisture level again and store the new value in a local variable
-    read_moisture_1()
-    local_moisture_level_end = moisture_1_percent
-    write_log_message("watering 1: stop moisture: %i" % (moisture_1_percent))
-    
-    # check that the wat moisture percent has increased sufficiently or set an error flag
-    if (local_moisture_level_start / local_moisture_level_end) > 0.95:
-        
-        # the water moisture did not seem to change
-        # try destroying and redefining the GPIO
-        destroy()
-        setup()
-        
-        # try watering again
-        # read the moisture level and store a local so we can test change after watering
-        read_moisture_1()
-        local_moisture_level_start = moisture_1_percent
-        write_log_message("watering 1: start moisture: %i" % (moisture_1_percent))
-        
-        # run the pump for pump_1_time seconds
-        run_pump_1(pump_1_time)
-        
-        # wait for water_interval_time to let the water spread before checking it has worked
-        time.sleep(water_interval_time)
-        
-        # read the moisture level again and store the new value in a local variable
-        read_moisture_1()
-        local_moisture_level_end = moisture_1_percent
-        write_log_message("watering 1: stop moisture: %i" % (moisture_1_percent))
-        
-        # check that the water moisture percent has increased
-        # if it hasnt, set an error flag to avoid risk of flooding
-        if (local_moisture_level_start / local_moisture_level_end) > 0.95 :
-            pump_1_error = True
-            write_log_message("error on pump 1")
+irrigation_system = IrrigationSystem(False)
 
-def water_2():
-    global pump_2_error
-    number_water_cycles = 0
-    
-    write_log_message("watering 2: start moisture: %i" % (moisture_1_percent))
-    while moisture_2_percent < stop_watering and pump_2_error == False:
-        run_pump_2(pump_2_time)
-        number_water_cycles += 1
-        time.sleep(water_interval_time)
-        read_moisture_2()
-        write_log_message("watering 2: test  moisture: %i" % (moisture_2_percent))
-        if moisture_2_percent < stop_watering and number_water_cycles == max_water_cycles:
-            pump_2_error = True
-            write_log_message("watering 2: error - too many water cycles")
-    write_log_message("watering 2: stop  moisture: %i" % (moisture_2_percent))
-        
-def water_3():
-    global pump_3_error
-    number_water_cycles = 0
-    
-    write_log_message("watering 3: start moisture: %i" % (moisture_3_percent))
-    while moisture_3_percent < stop_watering and pump_3_error == False:
-        write_log_message("watering 3: active - moisture: %i" % (moisture_3_percent))
-        run_pump_3(pump_3_time)
-        number_water_cycles += 1
-        time.sleep(water_interval_time)
-        read_moisture_3()
-        write_log_message("watering 3: test  moisture: %i" % (moisture_3_percent))
-        if moisture_3_percent < stop_watering and number_water_cycles == max_water_cycles:
-            pump_3_error = True
-            write_log_message("Watering 3: error - too many water cycles")
-    write_log_message("watering 3: stop  moisture: %i" % (moisture_3_percent))
-        
-def water_4():
-    # declare the global so we can change it if needed
-    global pump_4_error
-    
-    # read the moisture level and store a local so we can test change after watering
-    read_moisture_4()
-    local_moisture_level_start = moisture_4_percent
-    write_log_message("watering 4: start moisture: %i" % (moisture_4_percent))
-    
-    # run the pump for pump_4_seconds seconds
-    run_pump_4(pump_4_time)
-    
-    # wait for water_interval_time to let the water spread before checking it has worked
-    time.sleep(water_interval_time)
-    
-    # read the moisture level again and store the new value in a local variable
-    read_moisture_4()
-    local_moisture_level_end = moisture_4_percent
-    write_log_message("watering 4: stop moisture: %i" % (moisture_4_percent))
-    
-    # check that the water moisture percent has increased sufficiently or set an error flag
-    if (local_moisture_level_start / local_moisture_level_end) > 0.95 :
-        
-        # the water moisture did not seem to change
-        # try destroying and redefining the GPIO
-        destroy()
-        setup()
-        
-        # try watering again
-        # read the moisture level and store a local so we can test change after watering
-        read_moisture_4()
-        local_moisture_level_start = moisture_4_percent
-        write_log_message("watering 4: start moisture: %i" % (moisture_4_percent))
-        
-        # run the pump for pump_4_time seconds
-        run_pump_4(pump_4_time)
-        
-        # wait for water_interval_time to let the water spread before checking it has worked
-        time.sleep(water_interval_time)
-        
-        # read the moisture level again and store the new value in a local variable
-        read_moisture_4()
-        local_moisture_level_end = moisture_4_percent
-        write_log_message("watering 4: stop moisture: %i" % (moisture_4_percent))
-        
-        # check that the water moisture percent has increased
-        # if it hasnt, set an error flag to avoid risk of flooding
-        if (local_moisture_level_start / local_moisture_level_end) > 0.95 :
-            pump_4_error = True
-            write_log_message("error on pump 4")
+running = True  # Global flag to control loop execution
 
-def run_pump_1(num_seconds):
-    GPIO.output(PUMP_PIN_1, GPIO.LOW)
-    time.sleep(num_seconds)
-    GPIO.output(PUMP_PIN_1, GPIO.HIGH)
+# --------------------------
+# Old-style callback functions (3 arguments)
+# --------------------------
+def on_connect(client, userdata, flags, rc):
+    # Subscribe to a topic
+    client.subscribe("pzgrow/#", 0)
+    irrigation_system.set_mqtt_client(client)
+    output_message = f"INFO: water.py - on_connect - connected with result code {rc}"
+    irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+    
 
-def run_pump_2(num_seconds):
-    GPIO.output(PUMP_PIN_2, GPIO.LOW)
-    time.sleep(num_seconds)
-    GPIO.output(PUMP_PIN_2, GPIO.HIGH)
-
-def run_pump_3(num_seconds):
-    GPIO.output(PUMP_PIN_3, GPIO.LOW)
-    time.sleep(num_seconds)
-    GPIO.output(PUMP_PIN_3, GPIO.HIGH)
+def on_command_message(client, userdata, msg):
     
-def run_pump_4(num_seconds):
-    GPIO.output(PUMP_PIN_4, GPIO.LOW)
-    time.sleep(num_seconds)
-    GPIO.output(PUMP_PIN_4, GPIO.HIGH)
+    # Check that the message is in the right format
     
-def write_data_file():
-    
-    # try to open the log file
+    message_text = msg.payload.decode('utf-8')
     try:
-        moisture_data_file = open(moisture_data_file_name,"a")
-    except:
-        # there was a problem opening the log file
-        # write a message to stdout
-        write_log_message("error opening the file: %s" % (log_file))
-        return false
+        message_json = json.loads(message_text)
+    except Exception as e:
+        output_message = "ERROR: water.py - on_command_message - could not parse message payload into JSON"
+        irrigation_system.publish_message_and_print("pzgrow/error", output_message)
+        
+    # correct format so process 
     
-    # create a datetime object containing current date and time
-    now = datetime.now()
-
-    # create a strong from the datetime object with the format dd/mm/YY H:M:S
-    date_string = now.strftime("%d/%m/%Y")
-    time_string = now.strftime("%H:%M:%S")
-    
-    # write date, time and moistures to data file
-    moisture_data_file.write("%s %s,%i,%i,%i,%i\n" % (date_string, time_string, moisture_1_percent, moisture_2_percent, moisture_3_percent, moisture_4_percent))
-    
-    moisture_data_file.close()
-    
-def write_stdout():
-    
-    # print the time and moisture data to standard out
-    # if running as a service redirect to a log file in /var/log/water.log
-    
-    # create a datetime object containing current date and time
-    now = datetime.now()
-
-    # create a strong from the datetime object with the format dd/mm/YY H:M:S
-    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    
-    # print the date time string and mositure values
-    print(dt_string+" %i %i %i %i" % (moisture_1_percent, moisture_2_percent, moisture_3_percent, moisture_4_percent))
-    
-    sys.stdout.flush()
-    
-def write_log_message(message):
-    
-    # try to open the log file
-    try:
-        log_file = open(moisture_log_file_name,"a")
-    except:
-        # there was a problem opening the log file
-        # write a message to stdout
-        print("error opening the file: %s" % (log_file))
-        return false
-    
-    # create a datetime object containing current date and time
-    now = datetime.now()
-
-    # create a strong from the datetime object with the format dd/mm/YY H:M:S
-    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    
-    # write date, time and message to log file and stdout
-    log_file.write("%s %s\n" % (dt_string, message))
-    print("%s %s" %(dt_string, message))
-    
-    log_file.close()
-
-def read_moisture_1():
-    
-    # declare global variables locally to allow change
-    global moisture_1
-    global moisture_1_percent
-    global moisture_1_reading
-    
-    
-    values = [0]*100
-    for i in range(100):
-        values[i] = adc.read_adc(0, gain=GAIN)
-    moisture_1_reading = max(values)
-    moisture_1_percent = (int)((1.0-(float)((moisture_1_reading-moisture_1_min) / (moisture_1_range)))*100.0)
-    
-def read_moisture_2():
-    global moisture_2
-    global moisture_2_percent
-    global moisture_2_reading
-    
-    values = [0]*100
-    for i in range(100):
-        values[i] = adc.read_adc(1, gain=GAIN)
-    moisture_2_reading = max(values)
-    moisture_2_percent = (int)((1.0-(float)((moisture_2_reading-moisture_2_min) / (moisture_2_range)))*100.0)
-
-def read_moisture_3():
-    global moisture_3
-    global moisture_3_percent
-    global moisture_3_reading
-    
-    values = [0]*100
-    for i in range(100):
-        values[i] = adc.read_adc(2, gain=GAIN)
-    moisture_3_reading = max(values)
-    moisture_3_percent = (int)((1.0-(float)((moisture_3_reading-moisture_3_min) / (moisture_3_range)))*100.0)
-
-def read_moisture_4():
-    global moisture_4
-    global moisture_4_percent
-    global moisture_4_reading
-    
-    values = [0]*100
-    for i in range(100):
-        values[i] = adc.read_adc(3, gain=GAIN)
-    moisture_4_reading = max(values)
-    moisture_4_percent = (int)((1.0-(float)((moisture_4_reading-moisture_4_min) / (moisture_4_range)))*100.0)
+    else:
+        if irrigation_system.watering == True:
+            output_message = "ERROR: water.py - on_command_message - could not parse message payload into JSON"
+            irrigation_system.publish_message_and_print("pzgrow/error", output_message)
+        else:
+            output_message = "INFO: water.py - on_command_message - received - " + str(message_json["command"]["value"])
+            irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            if message_json["command"]["value"] == "Update":
+                irrigation_system.update()
+                output_message = "INFO: water.py - on_command_message - updated"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Settings":
+                irrigation_system.publish_settings()
+                output_message = "INFO: water.py - on_command_message - output settings"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Increase watering time":
+                irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds + 5
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - increased auto watering time to " + str(irrigation_system.auto_water_seconds)
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Decrease watering time":
+                irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds - 5
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - decreased auto watering time to " + str(irrigation_system.auto_water_seconds)
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Increase watering threshold":
+                irrigation_system.min_moisture = irrigation_system.min_moisture + 1
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Decrease watering threshold":
+                irrigation_system.min_moisture = irrigation_system.min_moisture - 1
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - increased watering threshold " + str(irrigation_system.min_moisture)
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Auto water on":
+                irrigation_system.auto_water_status = True
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - auto water turned on"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Auto water off":
+                irrigation_system.auto_water_status = False
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - auto water turned off"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Manual water c1":
+                irrigation_system.manual_water_channel_1()
+                output_message = "INFO: water.py - on_command_message - ran manual water c1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Manual water c2":
+                irrigation_system.manual_water_channel_2()
+                output_message = "INFO: water.py - on_command_message - ran manual water c2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Capture image":
+                irrigation_system.capture_image()
+                output_message = "INFO: water.py - on_command_message - capture image"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c1":
+                irrigation_system.set_channel_1_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c1":
+                irrigation_system.set_channel_1_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c2":
+                irrigation_system.set_channel_2_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c2":
+                irrigation_system.set_channel_2_status(False)
+                output_message = "INFO: water.py - on_command_message - deactivated c2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c1m1":
+                irrigation_system.set_channel_1_moisture_1_status(True)
+                irrigation_system.set_channel_1_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c1m1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c1m1":
+                irrigation_system.set_channel_1_moisture_1_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c1m1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c1m2":
+                irrigation_system.set_channel_1_moisture_2_status(True)
+                irrigation_system.set_channel_1_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c1m2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c1m2":
+                irrigation_system.set_channel_1_moisture_2_status(False)
+                irrigation_system.write_variables()
+                output_message = "Deactivated c1m2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c2m1":
+                irrigation_system.set_channel_2_moisture_1_status(True)
+                irrigation_system.set_channel_2_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c2m1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c2m1":
+                irrigation_system.set_channel_2_moisture_1_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c2m1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c2m2":
+                irrigation_system.set_channel_2_moisture_2_status(True)
+                irrigation_system.set_channel_2_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated C2m2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c2m2":
+                irrigation_system.set_channel_2_moisture_2_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c2m2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c1p1":
+                irrigation_system.set_channel_1_pump_1_status(True)
+                irrigation_system.set_channel_1_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c1p1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c1p1":
+                irrigation_system.set_channel_1_pump_1_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c1p1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c1p2":
+                irrigation_system.set_channel_1_pump_2_status(True)
+                irrigation_system.set_channel_1_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c1p2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c1p2":
+                irrigation_system.set_channel_1_pump_2_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c1p2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c2p1":
+                irrigation_system.set_channel_2_pump_1_status(True)
+                irrigation_system.set_channel_2_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c2p1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c2p1":
+                irrigation_system.set_channel_2_pump_1_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c2p1"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Activate c2p2":
+                irrigation_system.set_channel_2_pump_2_status(True)
+                irrigation_system.set_channel_2_status(True)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - activated c2p2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Deactivate c2p2":
+                irrigation_system.set_channel_2_pump_2_status(False)
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - deactivated c2p2"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c1m1 dry":
+                irrigation_system.set_channel_1_moisture_1_dry()
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - c1m1 dry level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c1m1 wet":
+                irrigation_system.set_channel_1_moisture_1_wet()
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - c1m1 wet level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c1m2 dry":
+                irrigation_system.set_channel_1_moisture_2_dry()
+                irrigation_system.write_variables()
+                output_message = "c1m2 dry level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c1m2 wet":
+                irrigation_system.set_channel_1_moisture_2_wet()
+                irrigation_system.write_variables()
+                output_message = "c1m2 wet level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c2m1 dry":
+                irrigation_system.set_channel_2_moisture_1_dry()
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - c2m1 dry level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c2m1 wet":
+                irrigation_system.set_channel_2_moisture_1_wet()
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - c2m1 wet level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c2m2 dry":
+                irrigation_system.set_channel_2_moisture_2_dry()
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - c2m2 dry level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Set c2m2 wet":
+                irrigation_system.set_channel_2_moisture_2_wet()
+                irrigation_system.write_variables()
+                output_message = "INFO: water.py - on_command_message - c2m2 wet level set"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            else:
+                output_message = "ERROR: water.py - on_command_message - command not recognised - " + message_json["command"]["value"]
+                print(output_message)
+                irrigation_system.publish_message_and_print("pzgrow/error", output_message)
+            irrigation_system.publish_status()
 
 def loop():
-    
-    while True:
+    global running
+    while running:
         
-        # read the mositure values
-        read_moisture_1()
-        #read_moisture_2()
-        #read_moisture_3()
-        read_moisture_4()
-        
-        # print the moisture values to the moisture data file
-        write_data_file()
-        
-        # check each channel and water if current moisture is less that the start_watering
-        # threshold for that channel and there is no error flag on pump
-        if moisture_1_percent < start_watering and pump_1_error == False:
-            water_1()
+        # pring and publish a message to show that system is operational
+        output_message = "INFO: water.py - loop - running"
+        irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             
-        #if moisture_2_percent < start_watering and pump_2_error = False:
-        #    water_2()
+        # check to see if the irrigation system is currently watering
         
-        #if moisture_3_percent < start_watering and pump_3_error = Fales:
-        #    water_3()
+        if irrigation_system.watering == False:
         
-        if moisture_4_percent < start_watering and pump_4_error == False:
-            water_4()
+            # we are not currently watering so ask system to auto-water if needed
+            
+            irrigation_system.auto_water()
+            
+            # publish the latest status
+            
+            irrigation_system.publish_status()
+            
+        else:
+            
+            # we are watering at the moment so send message and do nothing
+            
+            output_message = "INFO: water.py - loop - system currently watering"
+            irrigation_system.publish_message_and_print("pzgrow/info", output_message)
         
         # wait for read_internal_time seconds to avoid high processor load
-        time.sleep(read_interval_time)
+        time.sleep(READ_INTERVAL_TIME)
 
 def destroy():
-    write_log_message("closing connections")
-    GPIO.output(PUMP_PIN_1, GPIO.HIGH)
-    GPIO.output(PUMP_PIN_2, GPIO.HIGH)
-    GPIO.output(PUMP_PIN_3, GPIO.HIGH)
-    GPIO.output(PUMP_PIN_4, GPIO.HIGH)
-    GPIO.cleanup()
+    output_message = "INFO: water.py - destroy - closing connections"
+    irrigation_system.publish_message_and_print("pzgrow/info", output_message)
 
+
+# I have set BT to IPv4 so this is not required
+# May not work with the Hive MQTT serverless unless I can get an IPV4 version of the address
+# === Helper function to force IPv4 ===
+#def ipv4_host(hostname):
+#    return socket.gethostbyname(hostname)  # Returns IPv4 address
+
+#broker = ipv4_host(BROKER_HOSTNAME)  # Force IPv4        
+        
 if __name__ == '__main__':
     
-    # run set up
-    setup()
-    
-    write_log_message("starting")
+    # --------------------------
+    # Create MQTT client
+    # --------------------------
+    client = mqtt.Client(client_id=CLIENT_ID)
 
+    # Set callbacks
+    client.on_connect = on_connect
+    client.message_callback_add("pzgrow/command", on_command_message)
+    
+    #client.on_command_message = on_command_message
+
+    # Enable TLS
+    client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+
+    # Set username/password
+    client.username_pw_set(USERNAME, PASSWORD)
+
+    # Connect to broker
+    client.connect(BROKER_HOSTNAME, PORT, keepalive=60)
+    
+    # Start the network loop
+    client.loop_start()
+
+    # Keep running to receive messages
     try:
-        loop()
+        while True:
+            loop()
     except KeyboardInterrupt:
-        write_log_message("interupt received")
+        client.loop_stop()
+        client.disconnect()
     finally:
+        output_message = "INFO - water - main - cleaned up - exiting"
+        irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+        client.loop_stop()
+        client.disconnect()
         destroy()
-        write_log_message("cleaned up - exiting")
+
