@@ -53,30 +53,23 @@ class WaterLevelSensor:
       
       ping_time = self.pulse_in(GPIO.HIGH,self.timeout)
       distance = ping_time * 340.0 / 2.0 / 10000.0 # the sound speed is 340m/s, and calculate distance (cm)
-      #print("the distance is %f - max is %f - min is %f"%(distance, self.full_distance, self.empty_distance))
+      
+      # temp print statement
+      # print("The distance is %f - full is %f - empty is %f"%(distance, self.full_distance, self.empty_distance))
        
       if distance < self.full_distance:
         # the distance is less than full so either an actual error or a calibration issue
-        # return 100% and send an info message
-        output_string = "ERROR: WaterLevelSensor - get_water_level - distance less than full, returning 100% "
-        mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
-        time.sleep(0.1) # delay to allow published message to be read
-        print(output_string)
-        return(100.0)
+        # return 100% and send an error message
+        output_string = "ERROR: WaterLevelSensor - get_water_level - distance less than full"
+        return(-1, output_string)
       elif distance > self.empty_distance:
         # the distance is more than empty so either an actual error or a calibration issue
         # return 0% and send an info message
-        output_string = "ERROR: WaterLevelSensor - get_water_level - distance too high - returning empty"
-        mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
-        time.sleep(0.1) # delay to allow published message to be read
-        print(output_string)
-        return(0.0)
+        output_string = "ERROR: WaterLevelSensor - get_water_level - distance more than empty"
+        return(-1, output_string)
       else:
         percentage = int(((self.empty_distance - distance) / (self.empty_distance - self.full_distance))*100)
-        return(percentage)
+        return(percentage, "Empty message")
     else:
       output_string = "ERROR: WaterLevelSensor - get_water_level - called when not active"
-      mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(-1)
+      return(-1, output_string)

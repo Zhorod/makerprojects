@@ -13,14 +13,15 @@ import time
 # --------------------------
 # Configuration
 # --------------------------
+
 CLIENT_ID = "python-mqtt-client-" + str(time.time()) # Unique client ID
 BROKER_HOSTNAME = "a85dc6f63e6945e0be49d9103eb3fb6b.s1.eu.hivemq.cloud"
 PORT = 8883  # TLS port
-USERNAME = ""
-PASSWORD = ""
+USERNAME = "GrowControl"
+PASSWORD = "Gr0wplants"
 
 
-READ_INTERVAL_TIME = 1200 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
+READ_INTERVAL_TIME = 30 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
     
 irrigation_system = IrrigationSystem(False)
 
@@ -36,13 +37,6 @@ def on_connect(client, userdata, flags, rc):
     output_message = f"INFO: water.py - on_connect - connected with result code {rc}"
     irrigation_system.publish_message_and_print("pzgrow/info", output_message)
     
-    
-
-#def on_message(client, userdata, msg):
-#    print(f"Received message on {msg.topic}: {msg.payload.decode()}")
-
-#def on_publish(client, userdata, mid):
-#    print(f"Message {mid} published")
 
 def on_command_message(client, userdata, msg):
     
@@ -66,8 +60,11 @@ def on_command_message(client, userdata, msg):
             irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             if message_json["command"]["value"] == "Update":
                 irrigation_system.update()
-                irrigation_system.auto_water()
                 output_message = "INFO: water.py - on_command_message - updated"
+                irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            elif message_json["command"]["value"] == "Settings":
+                irrigation_system.publish_settings()
+                output_message = "INFO: water.py - on_command_message - output settings"
                 irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Increase watering time":
                 irrigation_system.auto_water_seconds = irrigation_system.auto_water_seconds + 5
@@ -101,13 +98,11 @@ def on_command_message(client, userdata, msg):
                 irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Manual water c1":
                 irrigation_system.manual_water_channel_1()
-                irrigation_system.update()
-                output_message = "INFO: water.py - on_command_message - manual water c1"
+                output_message = "INFO: water.py - on_command_message - ran manual water c1"
                 irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Manual water c2":
                 irrigation_system.manual_water_channel_2()
-                irrigation_system.update()
-                output_message = "INFO: water.py - on_command_message - manual water c2"
+                output_message = "INFO: water.py - on_command_message - ran manual water c2"
                 irrigation_system.publish_message_and_print("pzgrow/info", output_message)
             elif message_json["command"]["value"] == "Capture image":
                 irrigation_system.capture_image()
@@ -270,20 +265,27 @@ def loop():
     global running
     while running:
         
+        # pring and publish a message to show that system is operational
+        output_message = "INFO: water.py - loop - running"
+        irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            
         # check to see if the irrigation system is currently watering
         
         if irrigation_system.watering == False:
         
-            # update stored sensors and if auto water is active, water if required
+            # we are not currently watering so ask system to auto-water if needed
             
             irrigation_system.auto_water()
             
-            output_message = "INFO: water.py - loop - autowatered"
-            irrigation_system.publish_message_and_print("pzgrow/info", output_message)
+            # publish the latest status
+            
             irrigation_system.publish_status()
             
         else:
-            output_message = "INFO: water.py - loop - waiting as irrigation system currently watering"
+            
+            # we are watering at the moment so send message and do nothing
+            
+            output_message = "INFO: water.py - loop - system currently watering"
             irrigation_system.publish_message_and_print("pzgrow/info", output_message)
         
         # wait for read_internal_time seconds to avoid high processor load

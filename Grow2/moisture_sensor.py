@@ -43,34 +43,28 @@ class MoistureSensor:
           reading = adc.read_adc(self.channel, self.gain)
         except:
           output_string = "ERROR: MoistureSensor - get_moisture - a2d converter error"
-          mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
-          time.sleep(0.1) # delay to allow published message to be read
-          print(output_string)
-          return(-1)
+          return(-1, output_string)
         values[i] = reading
       
       # if we have been succesful, take the median
       
       moisture_reading = statistics.median(values)
+      
+      #print("The moisture reading is %f" % moisture_reading)
+      #sys.stdout.flush()
+      
+      # test if we are getting good data - no more than 10% less than min and 10% more than max
+      
+      if moisture_reading < (self.raw_min * 0.9) or moisture_reading > (self.raw_max * 1.1):
+        output_string = "ERROR: MoistureSensor - get_moisture - raw data reading out of range"
+        return(-1, output_string)
+      
       moisture_percent = (int)((1.0-(float)((moisture_reading-self.raw_min) / (self.raw_max - self.raw_min)))*100.0)
       
-      # auto tune that tests if the percent is out of range and changes the raw_min raw_max
-      # only concern is if there is a sensor error
-      
-      if moisture_percent < 0:
-        moisture_percent = 0
-        raw_max = moisture_reading
-      elif moisture_percent > 100:
-        moisture_percent = 100
-        raw_min = moisture_reading
-      
-      return(moisture_percent)
+      return(moisture_percent, "empty message")
     else:
-      #output_string = "INFO: MoistureSensor - get_moisture - called when not active"
-      #mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      #time.sleep(0.1) # delay to allow published message to be read
-      #print(output_string)
-      return(-1)
+      output_string = "INFO: MoistureSensor - get_moisture - called when not active"
+      return(-1, output_string)
 
   def set_dry(self):
     if (self.active == True):
@@ -84,10 +78,7 @@ class MoistureSensor:
           reading = adc.read_adc(self.channel, self.gain)
         except:
           output_string = "ERROR: MoistureSensor - set_dry - a2d converter error"
-          mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
-          time.sleep(0.1) # delay to allow published message to be read
-          print(output_string)
-          return(False)
+          return(False, output_string)
         values[i] = reading
       
       # if we have been succesful, take the median
@@ -97,16 +88,10 @@ class MoistureSensor:
       # set the max raw reading to current reading
       self.raw_max = moisture_reading
       output_string = "INFO: IrrigationSystem - set_dry - raw max set to %i" % (moisture_reading)
-      mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(True)
+      return(True, output_string)
     else:
       output_string = "ERROR: MoistureSensor - set_dry - called when not active"
-      mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(False)
+      return(False, output_string)
 
   def set_wet(self):
     if (self.active == True):
@@ -120,10 +105,7 @@ class MoistureSensor:
           reading = adc.read_adc(self.channel, self.gain)
         except:
           output_string = "ERROR: MoistureSensor - set_wet - a2d converter error"
-          mqtt_publish.single("pzgrow/error", output_string, hostname="test.mosquitto.org")
-          time.sleep(0.1) # delay to allow published message to be read
-          print(output_string)
-          return(False)
+          return(False, output_string)
         values[i] = reading
       
       # if we have been succesful, take the median
@@ -133,16 +115,10 @@ class MoistureSensor:
       # set the max raw reading to current reading
       self.raw_min = moisture_reading
       output_string = "INFO: IrrigationSystem - set_wet - raw min set to %i" % (moisture_reading)
-      mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(True)
+      return(True, output_string)
     else:
       output_string = "INFO: MoistureSensor - set_wet - called when not active"
-      mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(False)
+      return(False, output_string)
 
 
 # test the class works

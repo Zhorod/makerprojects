@@ -25,8 +25,8 @@ class WaterPump:
       GPIO.setmode(GPIO.BOARD) #numbers GPIOs by physical location)
     except:
       output_string = "INFO: IrrigationSystem - manual_water_channel_1 - GPIO model already set"
-      mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
+      #mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
+      #time.sleep(0.1) # delay to allow published message to be read
       print(output_string)
       
     # init instance variables
@@ -51,13 +51,10 @@ class WaterPump:
       #mqtt_publish.single("pzgrow/info", output_string, hostname="test.mosquitto.org")
       #time.sleep(0.1) # delay to allow published message to be read
       #print(output_string)
-      return(True)
+      return(True, "Empty message")
     else:
       output_string = "ERROR: WaterPump - run_pump - called when not active"
-      mqtt_publish.single("pzgrow/ERROR", output_string, hostname="test.mosquitto.org")
-      time.sleep(0.1) # delay to allow published message to be read
-      print(output_string)
-      return(False)
+      return(False, output_string)
 
 # test the class works
 
