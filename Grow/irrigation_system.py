@@ -25,14 +25,18 @@ MQTT_HOSTNAME = "a85dc6f63e6945e0be49d9103eb3fb6b.s1.eu.hivemq.cloud"
 #MQTT_HOSTNAME = "broker.hivemq.com"
 #MQTT_HOSTNAME = "test.mosquitto.org"
 MIN_MOISTURE = 95 # minimum moisture precentage before watering
-AUTO_WATER_SECONDS = 5 # default number of seconds to water for when auto watering
-MANUAL_WATER_SECONDS = 5 # default number of seconds to water for when manual watering
+AUTO_WATER_SECONDS = 30 # default number of seconds to water for when auto watering
+MANUAL_WATER_SECONDS = 10 # default number of seconds to water for when manual watering
 EMPTY_WATER_DISTANCE = 20 # default for empty water distance
 FULL_WATER_DISTANCE = 4 # default for full water distance
 WATER_LOW = 20 # percent below which the system wont water to save the pumps
 VARIABLE_FILENAME = "/home/mirror/GrowFiles/grow_variables.txt"
 IMAGE_PATH = '/home/mirror/Desktop/Images/'
-AUTO_WATER_BREAK_HOURS = 0.1 #avoids constant watering if a sensor is out - will only autowater once every 24 hours
+AUTO_WATER_BREAK_HOURS = 20 #avoids constant watering if a sensor is out - default 20 hours (can use decimal)
+
+# the last setting is tricky - too high and it may not water when needed
+# too low and it may water too much
+# in general once every 1 to 2 day is OK, so 20 hours, will increase moisture, though avoid flood
 
 
 class IrrigationSystem:
@@ -327,7 +331,7 @@ class IrrigationSystem:
       self.publish_message_and_print("pzgrow/info", output_string)
       return(False)
     else:
-      if self.water_level_value > WATER_LOW:
+      if self.water_level_value < WATER_LOW:
         # send an error message - we will water anyway as this is a manual request
         output_string = "ERROR: IrrigationSystem - manual_water_channel_1 - not enough water - " + str(self.water_level_value)
         self.publish_message_and_print("pzgrow/error", output_string)
@@ -348,9 +352,9 @@ class IrrigationSystem:
       self.publish_message_and_print("pzgrow/info", output_string)
       return(False)
     else:
-      if self.water_level_value > WATER_LOW:
+      if self.water_level_value < WATER_LOW:
         # send an error message - we will water anyway as this is a manual request
-        output_string = "ERROR: IrrigationSystem - manual_water_channel_2 - not enough water - " + self.water_level_value
+        output_string = "ERROR: IrrigationSystem - manual_water_channel_2 - not enough water - " + str(self.water_level_value)
         self.publish_message_and_print("pzgrow/error", output_string)
         
       self.watering = True

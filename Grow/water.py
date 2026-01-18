@@ -21,7 +21,7 @@ USERNAME = "GrowControl"
 PASSWORD = "Gr0wplants"
 
 
-READ_INTERVAL_TIME = 30 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
+READ_INTERVAL_TIME = 1800 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
     
 irrigation_system = IrrigationSystem(False)
 
