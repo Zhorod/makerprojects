@@ -32,7 +32,7 @@ FULL_WATER_DISTANCE = 4 # default for full water distance
 WATER_LOW = 20 # percent below which the system wont water to save the pumps
 VARIABLE_FILENAME = "/home/mirror/GrowFiles/grow_variables.txt"
 IMAGE_PATH = '/home/mirror/Desktop/Images/'
-AUTO_WATER_BREAK_HOURS = 20 #avoids constant watering if a sensor is out - default 20 hours (can use decimal)
+AUTO_WATER_BREAK_HOURS = 1 #avoids constant watering if a sensor is out - default 20 hours (can use decimal)
 
 # the last setting is tricky - too high and it may not water when needed
 # too low and it may water too much
@@ -108,7 +108,7 @@ class IrrigationSystem:
     # this function publishes the message as is i.e. with no additional time stape - used for indicators rather than text notifications
     try:
       #mqtt_publish.single(topic, output_string, hostname=MQTT_HOSTNAME)
-      self.mqtt_client.publish(topic, output_string,qos=2)
+      self.mqtt_client.publish(topic, output_string,qos=1)
     except:
       error_message = "ERROR: IrrigationSystem - publish_message - error publishing- " + str(output_string) + " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
       print(error_message)
@@ -124,7 +124,7 @@ class IrrigationSystem:
     # this function publishes and prints the message with a time stamp added for textual notifications
     output_message = output_string +  " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
     try:
-      self.mqtt_client.publish(topic, output_message,qos=0)
+      self.mqtt_client.publish(topic, output_message,qos=1)
       #mqtt_publish.single(topic, output_message, hostname=MQTT_HOSTNAME)
     except:
       error_message = "ERROR: IrrigationSystem - publish_message and print - error publishing - " + str(output_string) + " - at time " + datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
@@ -380,7 +380,7 @@ class IrrigationSystem:
     
     if self.watering == False:
       
-      # im not in the process of watering - pumps not running - update all readings
+      #not in the process of watering - pumps not running - update all readings
           
       self.update()
 
@@ -434,9 +434,8 @@ class IrrigationSystem:
           output_string = "ERROR: IrrigationSystem - auto_water - not enough water - level is " + str(self.water_level_value)
           self.publish_message_and_print("pzgrow/error", output_string)
           return(False)
-      
     else:
-      output_string = "INFO: IrrigationSystem - update - update paused as system currently watering"
+      output_string = "INFO: IrrigationSystem - auto_water - did not water system currently watering"
       self.publish_message_and_print("pzgrow/info", output_string)
       
     return(False)
@@ -649,32 +648,31 @@ class IrrigationSystem:
     
     def update(self):
       
+      # update all of the sensor values
+      # use the active flags to decide which moisture value to use for the combined value
+    
+      self.moisture_1_value, output_string = self.moisture_1.get_moisture()
+      if self.moisture_1_value == -1:
+          self.publish_message_and_print("pzgrow/error", output_string)
+      self.moisture_2_value, output_message = self.moisture_2.get_moisture()
+      if self.moisture_2_value == -1:
+          self.publish_message_and_print("pzgrow/error", output_string)
       if self.moisture_1.active == True and self.moisture_2.active == True:
-        # both active, use 1
-        self.moisture_1_value, output_string = self.moisture_1.get_moisture()
-        if self.moisture_1_value == -1:
-          self.publish_message_and_print("pzgrow/error", output_string)
-        self.moisture_2_value, output_message = self.moisture_2.get_moisture()
-        if self.moisture_2_value == -1:
-          self.publish_message_and_print("pzgrow/error", output_string)
-        # both active so use 1 - have considered combining but in practice this does not work
+        # both active - use moisture 1
         self.moisture_combined_value = self.moisture_1_value
+        return(True)
       elif self.moisture_1.active == True:
-        # only moisture 1 sensor active
-        self.moisture_1_value, output_string = self.moisture_1.get_moisture()
-        if self.moisture_1_value == -1:
-          self.publish_message_and_print("pzgrow/error", output_string)
+        # only moisture 1 active
         self.moisture_combined_value = self.moisture_1_value
-        self.moisture_2_value = -1
+        return(True)
       elif self.moisture_2.active == True:
-        # only moisture 2 sensor active
-        self.moisture_2_value, output_string = self.moisture_2.get_moisture()
-        if self.moisture_2_value == -1:
-          self.publish_message_and_print("pzgrow/error", output_string)
         self.moisture_combined_value = self.moisture_2_value
-        self.moisture_1_value = -1
+        return(True)
       else:
-        self.moisture_1_value = -1
-        self.moisture_2_value = -1
-        self.moisture_combined_value = -1
+        # no active moisture sensors
+        self.moisture_combine_value = -1
+        output_string = "INFO: IrrigationSystemChannel - update - mo moisture sensors on channel " + self.name
+        self.publish_message_and_print("pzgrow/error", output_string)
+        return(False)
+      
         

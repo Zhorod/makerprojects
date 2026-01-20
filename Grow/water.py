@@ -21,7 +21,7 @@ USERNAME = "GrowControl"
 PASSWORD = "Gr0wplants"
 
 
-READ_INTERVAL_TIME = 1800 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
+READ_INTERVAL_TIME = 900 #seconds - this is time delay between sensor readings - default to 3600 (60 mins)
     
 irrigation_system = IrrigationSystem(False)
 
@@ -32,7 +32,7 @@ running = True  # Global flag to control loop execution
 # --------------------------
 def on_connect(client, userdata, flags, rc):
     # Subscribe to a topic
-    client.subscribe("pzgrow/#", 0)
+    client.subscribe("pzgrow/#", qos=1)
     irrigation_system.set_mqtt_client(client)
     output_message = f"INFO: water.py - on_connect - connected with result code {rc}"
     irrigation_system.publish_message_and_print("pzgrow/info", output_message)

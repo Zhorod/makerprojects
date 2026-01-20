@@ -28,43 +28,39 @@ class MoistureSensor:
     self.samples = samples
     self.channel = channel
     self.gain = gain
-    self.active = active
+    self.active = active # will still return a value even if not active
   
   def get_moisture(self):
-    if (self.active == True):
-      moisture_percent = 0
-      moisture_reading = 0.0
-      
-      # take self.samples readings and use the median to determine a percentage using raw_min, raw_max and raw_range
-      
-      values = [0]*self.samples
-      for i in range(self.samples):
-        try:
-          reading = adc.read_adc(self.channel, self.gain)
-        except:
-          output_string = "ERROR: MoistureSensor - get_moisture - a2d converter error"
-          return(-1, output_string)
-        values[i] = reading
-      
-      # if we have been succesful, take the median
-      
-      moisture_reading = statistics.median(values)
-      
-      #print("The moisture reading is %f" % moisture_reading)
-      #sys.stdout.flush()
-      
-      # test if we are getting good data - no more than 10% less than min and 10% more than max
-      
-      if moisture_reading < (self.raw_min * 0.9) or moisture_reading > (self.raw_max * 1.1):
-        output_string = "ERROR: MoistureSensor - get_moisture - raw data reading out of range"
+    moisture_percent = 0
+    moisture_reading = 0.0
+    
+    # take self.samples readings and use the median to determine a percentage using raw_min, raw_max and raw_range
+    
+    values = [0]*self.samples
+    for i in range(self.samples):
+      try:
+        reading = adc.read_adc(self.channel, self.gain)
+      except:
+        output_string = "ERROR: MoistureSensor - get_moisture - a2d converter error"
         return(-1, output_string)
-      
-      moisture_percent = (int)((1.0-(float)((moisture_reading-self.raw_min) / (self.raw_max - self.raw_min)))*100.0)
-      
-      return(moisture_percent, "empty message")
-    else:
-      output_string = "INFO: MoistureSensor - get_moisture - called when not active"
-      return(-1, output_string)
+      values[i] = reading
+    
+    # if we have been succesful, take the median
+    
+    moisture_reading = statistics.median(values)
+    
+    #print("The moisture reading is %f" % moisture_reading)
+    #sys.stdout.flush()
+    
+    # test if we are getting good data - no more than 20% less than min and 20% more than max
+    
+    #if moisture_reading < (self.raw_min * 0.8) or moisture_reading > (self.raw_max * 1.2):
+    #  output_string = "ERROR: MoistureSensor - get_moisture - raw data reading out of range"
+    #  return(-1, output_string)
+    
+    moisture_percent = (int)((1.0-(float)((moisture_reading-self.raw_min) / (self.raw_max - self.raw_min)))*100.0)
+    
+    return(moisture_percent, "empty message")
 
   def set_dry(self):
     if (self.active == True):
